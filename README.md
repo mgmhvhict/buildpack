@@ -1,55 +1,146 @@
-# Heroku buildpack: PHP [![Build Status](https://travis-ci.org/heroku/heroku-buildpack-php.svg?branch=master)](https://travis-ci.org/heroku/heroku-buildpack-php)
+## How to setup WordPress on Heroku with the Heroku Buildpack for PHP
 
-![php](https://cloud.githubusercontent.com/assets/51578/8882982/73ea501a-3219-11e5-8f87-311e6b8a86fc.jpg)
+This will set up a fresh WordPress install on Heroku with the newly released [Heroku Buildpack for PHP](https://github.com/heroku/heroku-buildpack-php).
+
+* `nginx` - Nginx for serving web content.
+* `PHP` - PHP-FPM for process management.
+* `WordPress` - Downloaded from the Github WordPress Repo.
+* `MySQL` - ClearDB for the MySQL backend.
+* `Sendgrid` - Sendgrid for the email backend.
+* `MemCachier` - MemCachier for the memcached backend.
+* `New Relic`- Monitoring
+
+## Getting started
+
+Use the Deploy to Heroku button, or use the old fashioned way described below.
+
+[![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy)
+
+Clone this repository into a new directory.
+
+Create your Heroku app.
+
+```bash
+heroku apps:create application-name --stack cedar --buildpack https://github.com/heroku/heroku-buildpack-php --region eu
+```
+
+`--region eu` is for deploying your app in the European region.
+
+or on to add this buildpack to an existing app, run
+
+```bash
+heroku config:set BUILDPACK_URL=https://github.com/heroku/heroku-buildpack-php
+```
 
 
-This is the official [Heroku buildpack](http://devcenter.heroku.com/articles/buildpacks) for PHP applications.
+Before you push to Heroku make sure to add the following add-ons.
 
-It uses Composer for dependency management, supports PHP or HHVM (experimental) as runtimes, and offers a choice of Apache2 or Nginx web servers.
+```bash
+heroku addons:add cleardb
+heroku addons:add sendgrid
+heroku addons:add memcachier
+heroku addons:add papertrail
+heroku addons:add newrelic
+```
 
-## Usage
+Define your AWS keys for the AWS S3 Media Uploader plugin.
 
-You'll need to use at least an empty `composer.json` in your application.
+```bash
+heroku config:set AWS_ACCESS_KEY_ID=123
+heroku config:set AWS_SECRET_ACCESS_KEY=123
+```
+Some default configurations. WP_CACHE=true will enable Batcache with the Memcachier addon.
 
-    $ echo '{}' > composer.json
-    $ git add composer.json
-    $ git commit -m "add composer.json for PHP app detection"
+```bash
+heroku config:set DISABLE_WP_CRON=true
+heroku config:set WP_CACHE=true
+```
 
-If you also have files from other frameworks or languages that could trigger another buildpack to detect your application as one of its own, e.g. a `package.json` which might cause your code to be detected as a Node.js application even if it is a PHP application, then you need to manually set your application to use this buildpack:
+Deploy your WordPress site to Heroku.
 
-    $ heroku buildpacks:set heroku/php
+```bash
+git add .
+git commit -am "Initial commit"
+git push heroku master
+```
 
-This will use the officially published version. To use the `master` branch from GitHub instead:
+## Overview
 
-    $ heroku buildpacks:set https://github.com/heroku/heroku-buildpack-php
+```
+└── public                 # Heroku webroot
+    ├── content            # The wp-content directory. Renamed to content to avoid confusion with wp-content - and it looks prettier
+    │   ├── plugins        # Plugins
+    │   ├── mu-plugins     # Required plugins
+    │   └── themes         # Your custom themes
+    │
+    └── wp                 # Where the actual WordPress install will be installed by Composer
+```
 
-Please refer to [Dev Center](https://devcenter.heroku.com/categories/php) for further usage instructions.
+## Upgrade WordPress
 
-## Custom Platform Repositories
+Update the version number for the WordPress package in composer.json, then run `composer update` and commit the changes in composer.json and composer.lock. Do not upgrade WordPress from the admin-interface as it will not survive a restart or dyno change.
 
-The buildpack uses Composer repositories to resolve platform (`php`, `hhvm`, `ext-something`, ...) dependencies.
+## Setup local development
 
-To use a custom Composer repository with additional or different platform packages, add the URL to its `packages.json` to the `HEROKU_PHP_PLATFORM_REPOSITORIES` config var:
+Make sure you have [Composer](https://getcomposer.org/) installed first, then run
 
-    $ heroku config:set HEROKU_PHP_PLATFORM_REPOSITORIES="https://mybucket.s3.amazonaws.com/cedar-14/packages.json"
+```bash
+composer install
+```
 
-To allow the use of multiple custom repositories, the config var may hold a list of multiple repository URLs, separated by a space character, in ascending order of precedence.
+Create a local `.env` file.
 
-If the first entry in the list is "`-`" instead of a URL, the default platform repository is disabled entirely. This can be useful when testing development repositories, or to forcefully prevent the use of unwanted packages from the default platform repository.
+```bash
+CLEARDB_DATABASE_URL=mysql://root:123abc@127.0.0.1/my_wordpress_heroku_database_name
+```
 
-For instructions on how to build custom platform packages (and a repository to hold them), please refer to the instructions [further below](#custom-platform-packages-and-repositories).
+or install the heroku config plugin from https://github.com/ddollar/heroku-config and pull your environment variables from Heroku.
+The second option is to use the provided local-sample-config.php and rename it local-config.php. Update it with your local MySQL credentials, and you're good to go.
 
-**Please note that Heroku cannot provide support for issues related to custom platform repositories and packages.**
+> NOTE: If you don't have a command-line mysql accessible and working, Mac/Homebrew users can `brew install mysql` and then follow the directions to have launchd start mysql at login. I believe the default username is root and the default password is blank.
 
-## Development
+Install PHP 5.5 on Mac OS X with Homebrew if you don't already have it installed.
 
-The following information only applies if you're forking and hacking on this buildpack for your own purposes.
+```bash
+brew install --with-fpm php55
+```
 
-### Pull Requests
+Follow the instructions in the output to complete the setup. Most importantly check your .bash_profile or .zshrc and make sure you've set your paths correctly.
 
-Please submit all pull requests against `develop` as the base branch.
+```bash
+brew install php55-mcrypt
+brew install nginx
+```
 
-### Custom Platform Packages and Repositories
+Open a new shell and run `php -v` and `php-fpm -v` and make sure they both read PHP 5.5… If you're still on PHP 5.4 then check your paths again. Make sure /usr/local/sbin is before /usr/sbin in your PATH:
 
-Please refer to the [README in `support/build/`](support/build/README.md) for instructions.
+> Mountain Lion comes with php-fpm pre-installed, to ensure you are using the brew version you need to make sure /usr/local/sbin is before /usr/sbin in your PATH:
 
+```bash
+PATH="/usr/local/sbin:$PATH"
+```
+
+Add this below Heroku Toolbelt setting in .bashrc or .bash_profile to swap the PHP you use on the command line.
+
+```bash
+export PATH="$(brew --prefix homebrew/php/php55)/bin:$PATH"
+```
+
+Now to start your local dev environment run to start WordPress on http://localhost:5000/
+
+```bash
+foreman start
+```
+
+If you don't have foreman installed, you can do so with `gem install foreman` assuming you have Ruby running on your system. If it fails, try adding sudo in front of the command.
+
+## Known Issues
+
+If you try to develop locally without syncing your external MemCachier envvars you might see a 500 error or a *You do not have sufficient permissions to access this page.* - message. Workaround is to simply remove object-cache.php and advanced-cache.php from the content dir while doing local dev. In a future release I'll try to have these files added on deploy with Composer.
+
+## Sources
+
+This would not have been possible without the work and resources provided by the following people:
+
+* http://mattstauffer.co/blog/laravel-on-heroku-using-a-buildpack-locally-to-mimic-your-heroku-environment-nginx
+* https://github.com/mchung/wordpress-on-heroku
